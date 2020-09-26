@@ -7,10 +7,15 @@ package handler;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.math.BigInteger;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -21,6 +26,31 @@ import javax.servlet.http.HttpServletResponse;
  * @author Lrandom
  */
 public class AuthorizationServlet extends HttpServlet {
+
+    public static String getMd5(String input) {
+        try {
+
+            // Static getInstance method is called with hashing MD5 
+            MessageDigest md = MessageDigest.getInstance("MD5");
+
+            // digest() method is called to calculate message digest 
+            // of an input digest() return array of byte 
+            byte[] messageDigest = md.digest(input.getBytes());
+
+            // Convert byte array into signum representation 
+            BigInteger no = new BigInteger(1, messageDigest);
+
+            // Convert message digest into hex value 
+            String hashtext = no.toString(16);
+            while (hashtext.length() < 32) {
+                hashtext = "0" + hashtext;
+            }
+            return hashtext;
+        } // For specifying wrong message digest algorithms 
+        catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     /**
      * Processes requests for both HTTP <code>GET</code> and <code>POST</code>
@@ -39,7 +69,7 @@ public class AuthorizationServlet extends HttpServlet {
             out.println("<!DOCTYPE html>");
             out.println("<html>");
             out.println("<head>");
-            out.println("<title>Servlet AuthorizationServlet</title>");            
+            out.println("<title>Servlet AuthorizationServlet</title>");
             out.println("</head>");
             out.println("<body>");
             out.println("<h1>Servlet AuthorizationServlet at " + request.getContextPath() + "</h1>");
@@ -80,58 +110,45 @@ public class AuthorizationServlet extends HttpServlet {
         response.setContentType("text/html;charset=UTF-8");
         String username = request.getParameter("username");
         //Lấy về giá trị của input password
-        String password = "admin";// request.getParameter("password");
-        
-          Connection conn = null;
-        String urlConnectMySql = 
-                "jdbc:mysql://localhost:3306/test";
+        String password = request.getParameter("password");
+
+        int affectRows = 0;
+
+        //tạo đối tượng connection
+        Connection conn = null;
+        String urlConnectMySql
+                = "jdbc:mysql://localhost:3306/test";
+
         try {
-        conn = 
-                DriverManager.getConnection(
-                        urlConnectMySql
-                        ,"root"
-                        ,"koodinh"); 
-        }catch(Exception e){
-             response.getWriter().print(e.getMessage());
-           e.printStackTrace();
-        }
-        boolean isExist = false;
-        
-        try {
-            
-         response.getWriter().print(password);
-         String select = "SELECT * FROM users where username=? AND password = ?";
-         PreparedStatement prp = conn.prepareCall(select);
-         
-          
-         byte[] encodePass = password.getBytes("UTF-8");
-         MessageDigest md = MessageDigest.getInstance("MD5");
-         byte[] theEncode = md.digest(encodePass); 
-          response.getWriter().print(theEncode.toString());
-        
-         prp.setString(1, username);
-         
-         prp.setString(2, "21232f297a57a5a743894a0e4a801fc3");
-         isExist = true;//prp.execute();
+            //Mở connection đến myslq
+            Class.forName("com.mysql.jdbc.Driver");
+            conn
+                    = DriverManager.getConnection(
+                            urlConnectMySql,
+                             "root",
+                             "koodinh");
+
+            String select = "SELECT (id) as count FROM users where username=? AND password = ?";
+            PreparedStatement prp = conn.prepareCall(select);
+            prp.setString(1, username);
+            prp.setString(2, getMd5(password));
+            ResultSet rs = prp.executeQuery();
+            if (rs.next()) {
+                affectRows = rs.getInt("count");
+            } else {
+                affectRows = 0;
+            }
         } catch (Exception e) {
-             response.getWriter().print(e.getMessage());
-        
-             e.printStackTrace();
-             
+            response.getWriter().print(e.getMessage());
         }
-        
-        if(isExist){
+
+        if (affectRows > 0) {
             response.getWriter().write("Dang nhap thanh cong");
-        }else{
+        } else {
             response.getWriter().write("Dang nhap that bai");
         }
     }
 
-    /**
-     * Returns a short description of the servlet.
-     *
-     * @return a String containing servlet description
-     */
     @Override
     public String getServletInfo() {
         return "Short description";
